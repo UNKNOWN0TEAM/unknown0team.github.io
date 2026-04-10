@@ -229,30 +229,34 @@ if (document.getElementById('gallery')) {
   initGalleryLightbox();
 }
 
-// ─── BOUTON SONORE POUR MOBILE (CORRIGÉ) ───
+// ─── BOUTON SONORE AVEC FICHIERS ALERT-1 ET ALERT-2 (COMPATIBLE MOBILE) ───
 function initHeroSoundButton() {
   const soundBtn = document.getElementById('soundBtn');
   if (!soundBtn) return;
   
-  let audioCtx = null;
-  let isAudioInitialized = false;
+  let sound1 = null;
+  let sound2 = null;
+  let audioInitialized = false;
   
-  // Fonction pour initialiser l'audio (nécessaire sur mobile)
+  // Fonction pour précharger les sons
   const initAudio = () => {
-    if (isAudioInitialized) return;
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    isAudioInitialized = true;
+    if (audioInitialized) return;
+    
+    sound1 = new Audio('./assets/sounds/alert-1.mp3');
+    sound2 = new Audio('./assets/sounds/alert-2.mp3');
+    
+    sound1.volume = 0.85;
+    sound2.volume = 0.15;
+    sound1.preload = 'auto';
+    sound2.preload = 'auto';
+    
+    audioInitialized = true;
   };
   
-  const playTwoSounds = () => {
-    // Initialiser l'audio au premier clic (nécessaire pour mobile)
-    if (!isAudioInitialized) {
+  const playBothSounds = () => {
+    // Initialiser au premier clic
+    if (!audioInitialized) {
       initAudio();
-    }
-    
-    // Réactiver l'audio context si suspendu (mobile)
-    if (audioCtx && audioCtx.state === 'suspended') {
-      audioCtx.resume();
     }
     
     // Ajouter l'animation
@@ -267,32 +271,14 @@ function initHeroSoundButton() {
     icon.textContent = '⚡';
     text.textContent = 'PLAYING';
     
-    // Créer les sons (compatible mobile)
-    const oscillator1 = audioCtx.createOscillator();
-    const gain1 = audioCtx.createGain();
-    oscillator1.connect(gain1);
-    gain1.connect(audioCtx.destination);
-    oscillator1.frequency.value = 440;
-    gain1.gain.value = 0.2;
-    oscillator1.start();
+    // Jouer les sons
+    sound1.currentTime = 0;
+    sound1.play().catch(e => console.log('Son1 erreur:', e));
     
     setTimeout(() => {
-      const oscillator2 = audioCtx.createOscillator();
-      const gain2 = audioCtx.createGain();
-      oscillator2.connect(gain2);
-      gain2.connect(audioCtx.destination);
-      oscillator2.frequency.value = 880;
-      gain2.gain.value = 0.2;
-      oscillator2.start();
-      
-      setTimeout(() => {
-        oscillator2.stop();
-      }, 200);
+      sound2.currentTime = 0;
+      sound2.play().catch(e => console.log('Son2 erreur:', e));
     }, 150);
-    
-    setTimeout(() => {
-      oscillator1.stop();
-    }, 300);
     
     setTimeout(() => {
       soundBtn.classList.remove('playing');
@@ -301,30 +287,7 @@ function initHeroSoundButton() {
     }, 400);
   };
   
-  // Pour mobile, il faut un geste utilisateur pour activer l'audio
-  soundBtn.addEventListener('click', playTwoSounds);
-  
-  // Alternative : utiliser des fichiers audio (plus fiable sur mobile)
-  const playWithAudioFiles = () => {
-    soundBtn.classList.add('playing');
-    
-    const sound1 = new Audio('assets/sounds/alert-1.mp3');
-    const sound2 = new Audio('assets/sounds/alert-2.mp3');
-    sound1.volume = 0.85;
-    sound2.volume = 0.15;
-    
-    sound1.play();
-    setTimeout(() => {
-      sound2.play();
-    }, 150);
-    
-    setTimeout(() => {
-      soundBtn.classList.remove('playing');
-    }, 400);
-  };
-  
-  // Utilisez cette version si vous avez des fichiers audio
-   soundBtn.addEventListener('click', playWithAudioFiles);
+  soundBtn.addEventListener('click', playBothSounds);
 }
 
 document.addEventListener('DOMContentLoaded', initHeroSoundButton);
