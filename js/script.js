@@ -282,5 +282,21 @@ function initHeroSoundButton() {
     }, 400);
   });
 }
+// ─── HAMBURGER MENU ───
+const hamburger = document.getElementById('navHamburger');
+const navLinks = document.querySelector('.nav-links');
+
+hamburger?.addEventListener('click', () => {
+  hamburger.classList.toggle('open');
+  navLinks.classList.toggle('open');
+});
+
+// Fermer le menu quand on clique sur un lien
+document.querySelectorAll('[data-section]').forEach(link => {
+  link.addEventListener('click', () => {
+    hamburger?.classList.remove('open');
+    navLinks?.classList.remove('open');
+  });
+});
 
 document.addEventListener('DOMContentLoaded', initHeroSoundButton);
