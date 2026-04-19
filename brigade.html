@@ -459,11 +459,12 @@
   <div class="card-body" id="loginForm">
     <div class="error-msg" id="errorMsg">Identifiants invalides — accès refusé</div>
 
+    <form id="credForm" action="#" onsubmit="handleLogin(); return false;">
     <div class="field">
       <label>Identifiant</label>
       <div class="input-wrap">
         <span class="icon">▸</span>
-        <input type="text" id="username" placeholder="login" autocomplete="off" spellcheck="false">
+        <input type="text" id="username" name="username" placeholder="login" autocomplete="username" spellcheck="false">
       </div>
     </div>
 
@@ -471,13 +472,575 @@
       <label>Mot de passe</label>
       <div class="input-wrap">
         <span class="icon">◈</span>
-        <input type="password" id="password" placeholder="••••••••" autocomplete="off">
+        <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password">
       </div>
     </div>
 
-    <button class="btn" id="loginBtn" onclick="handleLogin()">
+    <button class="btn" id="loginBtn" type="submit">
       <span>Authentifier</span>
     </button>
+    </form>
+  </div>
+
+  <!-- Progress screen (shown after successful login) -->
+  <div class="progress-screen" id="progressScreen">
+    <div class="auth-ok">
+      <div class="checkmark">✓</div>
+      <div class="auth-ok-text">Authentification réussie · Accès accordé</div>
+    </div>
+
+    <div class="stage-label">
+      <span>Initialisation du système</span>
+      <span id="pctLabel">0%</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+
+    <div class="stages">
+      <div class="stage-item" id="s1">
+        <div class="stage-icon">01</div>
+        <div class="stage-text">Vérification des droits d'accès</div>
+        <div class="stage-time" id="t1"></div>
+      </div>
+      <div class="stage-item" id="s2">
+        <div class="stage-icon">02</div>
+        <div class="stage-text">Chargement des modules opérationnels</div>
+        <div class="stage-time" id="t2"></div>
+      </div>
+      <div class="stage-item" id="s3">
+        <div class="stage-icon">03</div>
+        <div class="stage-text">Synchronisation des données terrain</div>
+        <div class="stage-time" id="t3"></div>
+      </div>
+      <div class="stage-item" id="s4">
+        <div class="stage-icon">04</div>
+        <div class="stage-text">Établissement de la session sécurisée</div>
+        <div class="stage-time" id="t4"></div>
+      </div>
+      <div class="stage-item" id="s5">
+        <div class="stage-icon">05</div>
+        <div class="stage-text">Accès au panneau de contrôle</div>
+        <div class="stage-time" id="t5"></div>
+      </div>
+    </div>
+
+    <div class="redirect-msg" id="redirectMsg">► Redirection vers le tableau de bord...</div>
+  </div>
+
+  <!-- Footer -->
+  <div class="card-footer">
+    <span>v2.4.1-stable</span>
+    <span>BRIGADE OPS SYS</span>
+    <span>© 2026</span>
+  </div>
+</div>
+
+<script>
+  // ── Clock ──────────────────────────────────────────────
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('clock').textContent =
+      now.toISOString().replace('T',' ').slice(0,19) + ' UTC';
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  // ── SHA-256 via Web Crypto ─────────────────────────────
+  async function sha256(message) {
+    const msgBuffer = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  const CREDENTIALS = {
+    "f2a72e848b9e490a9f984270e8c1b078d555a66320310ec33a1fcf523ed7f247": 
+      "a025a7c8a21465498ba5ad037d38ff98c5a277646f3c283b676ef6bf6503d448" 
+  };
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BRIGADE — Control Panel</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&family=IBM+Plex+Mono:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #050810;
+    --panel: #080d1a;
+    --border: #1a2740;
+    --accent: #00d4ff;
+    --accent2: #ff3c3c;
+    --success: #00ff9d;
+    --text: #c8daf0;
+    --dim: #3a5068;
+    --glow: rgba(0, 212, 255, 0.15);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+
+  /* Scan line */
+  body::after {
+    content: '';
+    position: fixed;
+    top: -100%;
+    left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.4;
+    animation: scan 6s linear infinite;
+    pointer-events: none;
+  }
+
+  @keyframes scan {
+    0%   { top: -3px; }
+    100% { top: 100vh; }
+  }
+
+  /* Corner decorations */
+  .corner {
+    position: fixed;
+    width: 60px; height: 60px;
+    opacity: 0.4;
+  }
+  .corner-tl { top: 20px; left: 20px; border-top: 1px solid var(--accent); border-left: 1px solid var(--accent); }
+  .corner-tr { top: 20px; right: 20px; border-top: 1px solid var(--accent); border-right: 1px solid var(--accent); }
+  .corner-bl { bottom: 20px; left: 20px; border-bottom: 1px solid var(--accent); border-left: 1px solid var(--accent); }
+  .corner-br { bottom: 20px; right: 20px; border-bottom: 1px solid var(--accent); border-right: 1px solid var(--accent); }
+
+  /* Status bar top */
+  .status-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 28px;
+    background: rgba(0,212,255,0.04);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 0.15em;
+    font-family: 'Share Tech Mono', monospace;
+  }
+  .status-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 6px var(--success);
+    margin-right: 6px;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Main card */
+  .card {
+    width: 420px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    position: relative;
+    animation: fadeIn 0.6s ease forwards;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: -1px; left: 10%; right: 10%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+
+  /* Header */
+  .card-header {
+    padding: 28px 32px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .logo-mark {
+    width: 44px; height: 44px;
+    border: 1px solid var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .logo-mark::before {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border: 1px solid rgba(0,212,255,0.3);
+  }
+  .logo-mark svg { position: relative; z-index: 1; }
+
+  .brand-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    letter-spacing: 0.2em;
+    color: #fff;
+    line-height: 1;
+  }
+  .brand-sub {
+    font-size: 9px;
+    color: var(--dim);
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    margin-top: 3px;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  /* Body */
+  .card-body {
+    padding: 28px 32px 32px;
+  }
+
+  .field {
+    margin-bottom: 18px;
+  }
+  .field label {
+    display: block;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 7px;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .input-wrap {
+    position: relative;
+  }
+  .input-wrap .icon {
+    position: absolute;
+    left: 12px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--dim);
+    font-size: 14px;
+    pointer-events: none;
+  }
+
+  input {
+    width: 100%;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    padding: 11px 14px 11px 36px;
+    outline: none;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+    letter-spacing: 0.05em;
+  }
+  input:focus {
+    border-color: var(--accent);
+    background: var(--glow);
+    box-shadow: 0 0 0 1px rgba(0,212,255,0.1), inset 0 0 20px rgba(0,212,255,0.04);
+  }
+  input::placeholder { color: var(--dim); opacity: 0.6; }
+
+  /* Error message */
+  .error-msg {
+    display: none;
+    background: rgba(255, 60, 60, 0.08);
+    border: 1px solid rgba(255,60,60,0.3);
+    color: var(--accent2);
+    font-size: 11px;
+    padding: 9px 12px;
+    letter-spacing: 0.08em;
+    margin-bottom: 16px;
+    position: relative;
+    font-family: 'Share Tech Mono', monospace;
+  }
+  .error-msg::before {
+    content: '⚠ ';
+  }
+  .error-msg.visible { display: block; animation: shake 0.35s ease; }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    20%      { transform: translateX(-6px); }
+    40%      { transform: translateX(6px); }
+    60%      { transform: translateX(-4px); }
+    80%      { transform: translateX(4px); }
+  }
+
+  /* Submit button */
+  .btn {
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 17px;
+    letter-spacing: 0.25em;
+    padding: 13px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: color 0.2s;
+    margin-top: 4px;
+  }
+  .btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--accent);
+    transform: translateX(-101%);
+    transition: transform 0.3s ease;
+    z-index: 0;
+  }
+  .btn:hover::before { transform: translateX(0); }
+  .btn:hover { color: var(--bg); }
+  .btn span { position: relative; z-index: 1; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn:disabled::before { display: none; }
+
+  /* ============ PROGRESS SCREEN ============ */
+  .progress-screen {
+    display: none;
+    padding: 28px 32px 32px;
+  }
+  .progress-screen.visible { display: block; }
+
+  .auth-ok {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .checkmark {
+    width: 22px; height: 22px;
+    border: 1px solid var(--success);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--success);
+    font-size: 13px;
+    flex-shrink: 0;
+    animation: popIn 0.3s ease;
+  }
+  @keyframes popIn {
+    from { transform: scale(0); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+  }
+  .auth-ok-text {
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: var(--success);
+    font-family: 'Share Tech Mono', monospace;
+    text-transform: uppercase;
+  }
+
+  .stage-label {
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    font-family: 'Share Tech Mono', monospace;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .progress-track {
+    width: 100%;
+    height: 3px;
+    background: var(--border);
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--success));
+    width: 0%;
+    transition: width 0.5s ease;
+    position: relative;
+  }
+  .progress-fill::after {
+    content: '';
+    position: absolute;
+    right: 0; top: -3px;
+    width: 10px; height: 9px;
+    background: var(--success);
+    box-shadow: 0 0 10px var(--success), 0 0 20px rgba(0,255,157,0.4);
+    border-radius: 50%;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .progress-fill.active::after { opacity: 1; }
+
+  .stages {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .stage-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    opacity: 0.3;
+    transition: opacity 0.4s;
+  }
+  .stage-item.done   { opacity: 1; }
+  .stage-item.active { opacity: 1; }
+
+  .stage-icon {
+    width: 18px; height: 18px;
+    border: 1px solid var(--dim);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px;
+    color: var(--dim);
+    flex-shrink: 0;
+    transition: border-color 0.3s, color 0.3s, box-shadow 0.3s;
+    font-family: 'Share Tech Mono', monospace;
+  }
+  .stage-item.done .stage-icon {
+    border-color: var(--success);
+    color: var(--success);
+    box-shadow: 0 0 8px rgba(0,255,157,0.3);
+  }
+  .stage-item.active .stage-icon {
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 8px rgba(0,212,255,0.3);
+    animation: blink 0.8s ease-in-out infinite;
+  }
+  @keyframes blink {
+    0%,100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+  }
+
+  .stage-text {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--text);
+  }
+  .stage-item.active .stage-text { color: var(--accent); }
+  .stage-item.done  .stage-text  { color: var(--success); }
+
+  .stage-time {
+    margin-left: auto;
+    font-size: 9px;
+    color: var(--dim);
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .redirect-msg {
+    margin-top: 22px;
+    font-size: 10px;
+    color: var(--dim);
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 0.1em;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.5s;
+  }
+  .redirect-msg.visible { opacity: 1; }
+
+  /* Footer */
+  .card-footer {
+    border-top: 1px solid var(--border);
+    padding: 12px 32px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    color: var(--dim);
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 0.12em;
+  }
+</style>
+</head>
+<body>
+
+<div class="corner corner-tl"></div>
+<div class="corner corner-tr"></div>
+<div class="corner corner-bl"></div>
+<div class="corner corner-br"></div>
+
+<div class="status-bar">
+  <span><span class="status-dot"></span>SYSTÈME EN LIGNE</span>
+  <span id="clock"></span>
+  <span>NODE-01 · SECURE</span>
+</div>
+
+<div class="card">
+  <!-- Header -->
+  <div class="card-header">
+    <div class="logo-mark">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+        <path d="M11 2L3 7V15L11 20L19 15V7L11 2Z" stroke="#00d4ff" stroke-width="1.2" fill="none"/>
+        <path d="M11 6L6 9V13L11 16L16 13V9L11 6Z" fill="rgba(0,212,255,0.15)" stroke="#00d4ff" stroke-width="0.8"/>
+        <circle cx="11" cy="11" r="1.5" fill="#00d4ff"/>
+      </svg>
+    </div>
+    <div>
+      <div class="brand-name">Brigade</div>
+      <div class="brand-sub">Control Panel · Accès Sécurisé</div>
+    </div>
+  </div>
+
+  <!-- Login form -->
+  <div class="card-body" id="loginForm">
+    <div class="error-msg" id="errorMsg">Identifiants invalides — accès refusé</div>
+
+    <form id="credForm" action="#" onsubmit="handleLogin(); return false;">
+    <div class="field">
+      <label>Identifiant</label>
+      <div class="input-wrap">
+        <span class="icon">▸</span>
+        <input type="text" id="username" name="username" placeholder="login" autocomplete="username" spellcheck="false">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Mot de passe</label>
+      <div class="input-wrap">
+        <span class="icon">◈</span>
+        <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+    </div>
+
+    <button class="btn" id="loginBtn" type="submit">
+      <span>Authentifier</span>
+    </button>
+    </form>
   </div>
 
   <!-- Progress screen (shown after successful login) -->
@@ -557,8 +1120,8 @@
   // password: "brigade2026" → SHA-256 hash
   // Generate via: https://emn178.github.io/online-tools/sha256.html
   const CREDENTIALS = {
-    "f2a72e848b9e490a9f984270e8c1b078d555a66320310ec33a1fcf523ed7f247": 
-      "a025a7c8a21465498ba5ad037d38ff98c5a277646f3c283b676ef6bf6503d448"
+    "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918":  // "admin"
+      "3d2571aab7ab6b4c2dd6ea9ce6afe064b7ddc0a5a19cab8dd5f2b5b1b6ef43a3"  // "brigade2026"
   };
 
   // ── Login handler ─────────────────────────────────────
@@ -668,10 +1231,7 @@
     return new Promise(r => setTimeout(r, ms));
   }
 
-  // Enter key support
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Enter') handleLogin();
-  });
+
 </script>
 </body>
 </html>
